@@ -34,6 +34,7 @@ int ROW, COL;
 double TD;
 
 // Failure detection parameters
+int RESET_EVERY_N = 0;             // 0 means disabled by default
 double MAX_ACCELERATION = 20.0;     // m/s²
 double MAX_ANGULAR_VEL = 5.0;       // rad/s
 double MAX_TRANSLATION = 1.0;       // meters
@@ -99,6 +100,9 @@ void readParameters(std::string config_file)
     FLOW_BACK = fsSettings["flow_back"];
 
     // Read failure detection parameters
+    if (fsSettings["reset_every_n"].isInt())
+        RESET_EVERY_N = fsSettings["reset_every_n"];
+        
     if (fsSettings["max_acceleration"].isReal())
         MAX_ACCELERATION = fsSettings["max_acceleration"];
     if (fsSettings["max_angular_vel"].isReal())

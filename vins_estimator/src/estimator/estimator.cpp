@@ -1255,6 +1255,12 @@ void Estimator::double2vector()
 
 bool Estimator::failureDetection()
 {
+    // Reset every N frames if RESET_EVERY_N is set to a positive value
+    if (RESET_EVERY_N > 0 && inputImageCnt % RESET_EVERY_N == 0) {
+        ROS_WARN("Resetting system every %d frames as configured", RESET_EVERY_N);
+        return true;
+    }
+    
     // Skip failure detection if recovery is disabled
     if (!ENABLE_FAILURE_RECOVERY) {
         return false;

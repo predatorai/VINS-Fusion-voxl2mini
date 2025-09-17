@@ -50,6 +50,7 @@ extern int ROLLING_SHUTTER;
 extern int ROW, COL;
 
 // Failure detection parameters
+extern int RESET_EVERY_N;
 extern double MAX_ACCELERATION;
 extern double MAX_ANGULAR_VEL;
 extern double MAX_TRANSLATION;
