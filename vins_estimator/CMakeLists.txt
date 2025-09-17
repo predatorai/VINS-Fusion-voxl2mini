@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(vins)
 
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "-std=c++14")
 #-DEIGEN_USE_MKL_ALL")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
@@ -16,19 +16,21 @@ find_package(catkin REQUIRED COMPONENTS
     camera_models
     image_transport)
 
-find_package(OpenCV REQUIRED)
+#find_package(OpenCV REQUIRED)
 
 # message(WARNING "OpenCV_VERSION: ${OpenCV_VERSION}")
 
 find_package(Ceres REQUIRED)
-
-include_directories(${catkin_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS})
+file(GLOB OpenCV_LIBS "/usr/lib64/libopencv*.so")
+file(GLOB Ceres_LIBS "/usr/lib64/libceres*.so")
+file(GLOB Glog_LIBS "/usr/lib/aarch64-linux-gnu/libglog*.so")
+include_directories(${catkin_INCLUDE_DIRS} "/usr/include/ceres/" "/usr/include/opencv")
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-find_package(Eigen3)
+# find_package(Eigen3)
 include_directories(
   ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
+  "/usr/include/eigen3" 
 )
 
 catkin_package()
@@ -50,15 +52,15 @@ add_library(vins_lib
     src/initial/initial_sfm.cpp
     src/initial/initial_ex_rotation.cpp
     src/featureTracker/feature_tracker.cpp)
-target_link_libraries(vins_lib ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
+target_link_libraries(vins_lib ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${Ceres_LIBS} ${Glog_LIBS})
 
 
 add_executable(vins_node src/rosNodeTest.cpp)
 target_link_libraries(vins_node vins_lib) 
 
-add_executable(kitti_odom_test src/KITTIOdomTest.cpp)
-target_link_libraries(kitti_odom_test vins_lib) 
+# add_executable(kitti_odom_test src/KITTIOdomTest.cpp)
+# target_link_libraries(kitti_odom_test vins_lib) 
 
-add_executable(kitti_gps_test src/KITTIGPSTest.cpp)
-target_link_libraries(kitti_gps_test vins_lib) 
+# add_executable(kitti_gps_test src/KITTIGPSTest.cpp)
+# target_link_libraries(kitti_gps_test vins_lib) 
 
