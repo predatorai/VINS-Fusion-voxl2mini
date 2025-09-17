@@ -49,6 +49,14 @@ F_threshold: 1.0        # ransac threshold (pixel)
 show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
 
+# Failure detection parameters
+max_acceleration: 20.0      # Maximum allowed acceleration (m/s^2)
+max_angular_vel: 5.0       # Maximum allowed angular velocity (rad/s)
+max_translation: 1.0       # Maximum translation between frames (m)
+max_rotation: 30.0         # Maximum rotation between frames (degrees)
+min_tracked_features: 20   # Minimum number of tracked features
+enable_failure_recovery: 1 # Enable/disable failure recovery
+
 #optimization parameters
 max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
 max_num_iterations: 8   # max solver itrations, to guarantee real time

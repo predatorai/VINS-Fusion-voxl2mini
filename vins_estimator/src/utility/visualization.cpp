@@ -11,7 +11,7 @@
 
 using namespace ros;
 using namespace Eigen;
-ros::Publisher pub_odometry, pub_latest_odometry;
+ros::Publisher pub_odometry, pub_odometry_mavros, pub_latest_odometry;
 ros::Publisher pub_path;
 ros::Publisher pub_point_cloud, pub_margin_cloud;
 ros::Publisher pub_key_poses;
@@ -36,6 +36,8 @@ void registerPub(ros::NodeHandle &n)
     pub_latest_odometry = n.advertise<nav_msgs::Odometry>("imu_propagate", 1000);
     pub_path = n.advertise<nav_msgs::Path>("path", 1000);
     pub_odometry = n.advertise<nav_msgs::Odometry>("odometry", 1000);
+    pub_odometry_mavros = n.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 1000);
+    // pub_point_cloud = n.advertise<sensor_msgs::PointCloud>("point_cloud", 1000);
     pub_point_cloud = n.advertise<sensor_msgs::PointCloud>("point_cloud", 1000);
     pub_margin_cloud = n.advertise<sensor_msgs::PointCloud>("margin_cloud", 1000);
     pub_key_poses = n.advertise<visualization_msgs::Marker>("key_poses", 1000);
@@ -150,24 +152,27 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         path.header = header;
         path.header.frame_id = "world";
         path.poses.push_back(pose_stamped);
+        pub_odometry_mavros.publish(pose_stamped); //added
         pub_path.publish(path);
 
         // write result to file
         ofstream foutC(VINS_RESULT_PATH, ios::app);
         foutC.setf(ios::fixed, ios::floatfield);
-        foutC.precision(0);
-        foutC << header.stamp.toSec() * 1e9 << ",";
+        foutC.precision(9);
+        foutC << header.stamp.toSec()<< " ";
         foutC.precision(5);
-        foutC << estimator.Ps[WINDOW_SIZE].x() << ","
-              << estimator.Ps[WINDOW_SIZE].y() << ","
-              << estimator.Ps[WINDOW_SIZE].z() << ","
-              << tmp_Q.w() << ","
-              << tmp_Q.x() << ","
-              << tmp_Q.y() << ","
-              << tmp_Q.z() << ","
-              << estimator.Vs[WINDOW_SIZE].x() << ","
-              << estimator.Vs[WINDOW_SIZE].y() << ","
-              << estimator.Vs[WINDOW_SIZE].z() << "," << endl;
+        foutC << estimator.Ps[WINDOW_SIZE].x() << " "
+              << estimator.Ps[WINDOW_SIZE].y() << " "
+              << estimator.Ps[WINDOW_SIZE].z() << " "
+//              << tmp_Q.w() << " "  // x y z w order for evaluation
+              << tmp_Q.x() << " "
+              << tmp_Q.y() << " "
+              << tmp_Q.z() << " "
+              << tmp_Q.w()// << " "
+//              << estimator.Vs[WINDOW_SIZE].x() << ","
+//              << estimator.Vs[WINDOW_SIZE].y() << ","
+//              << estimator.Vs[WINDOW_SIZE].z() << ","
+              << endl;
         foutC.close();
         Eigen::Vector3d tmp_T = estimator.Ps[WINDOW_SIZE];
         printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
@@ -270,6 +275,9 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         p.z = w_pts_i(2);
         point_cloud.points.push_back(p);
     }
+    // sensor_msgs::PointCloud for_octo_pcl;
+    // sensor_msgs::convertPointCloudToPointCloud2(point_cloud, for_octo_pcl);
+    // pub_point_cloud.publish(for_octo_pcl);
     pub_point_cloud.publish(point_cloud);
 
 

@@ -14,6 +14,9 @@ Estimator::Estimator(): f_manager{Rs}
 {
     ROS_INFO("init begins");
     initThreadFlag = false;
+    tracking_status = TrackingStatus::NORMAL;
+    consecutive_tracking_failures = 0;
+    last_tracking_quality_time = 0;
     clearState();
 }
 
@@ -28,13 +31,11 @@ Estimator::~Estimator()
 
 void Estimator::clearState()
 {
-    mProcess.lock();
-    while(!accBuf.empty())
-        accBuf.pop();
-    while(!gyrBuf.empty())
-        gyrBuf.pop();
-    while(!featureBuf.empty())
-        featureBuf.pop();
+    ROS_INFO("[clearState] Clearing buffers...");
+
+    accBuf = std::queue<std::pair<double, Eigen::Vector3d>>();  // Clear by assignment
+    gyrBuf = std::queue<std::pair<double, Eigen::Vector3d>>();
+    featureBuf = std::queue<std::pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > >();
 
     prevTime = -1;
     curTime = 0;
@@ -43,6 +44,9 @@ void Estimator::clearState()
     initR = Eigen::Matrix3d::Identity();
     inputImageCnt = 0;
     initFirstPoseFlag = false;
+
+    largeRot = false;
+    largeTrans = false;
 
     for (int i = 0; i < WINDOW_SIZE + 1; i++)
     {
@@ -412,6 +416,46 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
+    
+    // Check tracking quality before processing new frame
+    if (solver_flag == NON_LINEAR) {
+        checkTrackingQuality();
+    }
+    
+    // If we're in a failed state, try to reinitialize
+    // static int reinit_attempts = 0;
+    const int max_reinit_attempts = 10;
+    
+    // if (failure_occur) {
+    //     // Keep some history but limit the number of frames to prevent memory issues
+    //     if (all_image_frame.size() > 10) {
+    //         // Keep only the last few frames
+    //         auto it = all_image_frame.begin();
+    //         std::advance(it, all_image_frame.size() - 5);
+    //         all_image_frame.erase(all_image_frame.begin(), it);
+    //     }
+        
+    //     ROS_WARN("In failed state, attempting reinitialization (attempt %d/%d)...", 
+    //             reinit_attempts + 1, max_reinit_attempts);
+                
+    //     if (initialStructure()) {
+    //         ROS_WARN("Reinitialization successful!");
+    //         failure_occur = 0;
+    //         reinit_attempts = 0;
+    //         // Reset frame count to allow proper window filling
+    //         frame_count = WINDOW_SIZE - 1;
+    //     } else {
+    //         reinit_attempts++;
+    //         if (reinit_attempts >= max_reinit_attempts) {
+    //             ROS_ERROR("Max reinitialization attempts reached. Please restart the system.");
+    //         } else {
+    //             ROS_WARN("Reinitialization failed (attempt %d/%d), waiting for next frame...", 
+    //                     reinit_attempts, max_reinit_attempts);
+    //         }
+    //         return;
+    //     }
+    // }
+    
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
     {
         marginalization_flag = MARGIN_OLD;
@@ -554,11 +598,12 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
         if (failureDetection())
         {
-            ROS_WARN("failure detection!");
+            ROS_WARN("Failure detected! Resetting system...");
             failure_occur = 1;
-            clearState();
+            recent_failure = true;
+            resetSystem();
             setParameter();
-            ROS_WARN("system reboot!");
+            ROS_WARN("System reset complete. Waiting for re-initialization...");
             return;
         }
 
@@ -722,6 +767,262 @@ bool Estimator::initialStructure()
     }
 
 }
+
+// bool Estimator::initialStructure()
+// {
+//     TicToc t_sfm;
+//     ROS_INFO("Attempting initial structure computation...");
+    
+//     // Check if we have enough frames
+//     if (all_image_frame.size() < 5) {
+//         ROS_WARN("Not enough frames for initialization (need at least 5, have %zu)", all_image_frame.size());
+//         return false;
+//     }
+    
+//     // Ensure we have enough features
+//     if (f_manager.getFeatureCount() < 20) {
+//         ROS_WARN("Insufficient features for initialization (%d < 20)", f_manager.getFeatureCount());
+//         return false;
+//     }
+    
+//     // Check IMU observability
+//     bool has_valid_imu = false;
+//     if (USE_IMU) {
+//         map<double, ImageFrame>::iterator frame_it;
+//         Vector3d sum_g = Vector3d::Zero();
+//         int valid_imu_frames = 0;
+        
+//         for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++) {
+//             if (frame_it->second.pre_integration != nullptr) {
+//                 double dt = frame_it->second.pre_integration->sum_dt;
+//                 if (dt > 1e-5) {  // Ensure valid time interval
+//                     Vector3d tmp_g = frame_it->second.pre_integration->delta_v / dt;
+//                     sum_g += tmp_g;
+//                     valid_imu_frames++;
+//                 }
+//             }
+//         }
+        
+//         if (valid_imu_frames > 0) {
+//             Vector3d aver_g = sum_g / valid_imu_frames;
+//             double var = 0;
+            
+//             for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++) {
+//                 if (frame_it->second.pre_integration != nullptr) {
+//                     double dt = frame_it->second.pre_integration->sum_dt;
+//                     if (dt > 1e-5) {
+//                         Vector3d tmp_g = frame_it->second.pre_integration->delta_v / dt;
+//                         var += (tmp_g - aver_g).squaredNorm();
+//                     }
+//                 }
+//             }
+            
+//             var = sqrt(var / valid_imu_frames);
+//             ROS_INFO("IMU excitation: var=%.3f, frames=%d", var, valid_imu_frames);
+            
+//             if (var > 0.25) {
+//                 has_valid_imu = true;
+//             } else {
+//                 ROS_WARN("Insufficient IMU excitation (var=%.3f < 0.25)", var);
+//             }
+//         } else {
+//             ROS_WARN("No valid IMU measurements found");
+//         }
+//     }
+
+//     // Prepare for global SfM - use all_image_frame size instead of frame_count
+//     int num_frames = all_image_frame.size();
+//     if (num_frames < 2) {
+//         ROS_WARN("Not enough frames for SfM (need at least 2, have %d)", num_frames);
+//         return false;
+//     }
+    
+//     // Check if we have enough features
+//     int total_features = 0;
+//     for (const auto &it_per_id : f_manager.feature) {
+//         if (it_per_id.feature_per_frame.size() >= 2) {
+//             total_features++;
+//         }
+//     }
+    
+//     if (total_features < 20) {
+//         ROS_WARN("Insufficient features for SfM (need at least 20, have %d)", total_features);
+//         return false;
+//     }
+    
+//     ROS_INFO("Performing SfM with %d frames and %d features", num_frames, total_features);
+    
+//     // Initialize SfM structures
+//     Quaterniond Q[num_frames];
+//     Vector3d T[num_frames];
+//     map<int, Vector3d> sfm_tracked_points;
+//     vector<SFMFeature> sfm_f;
+//     for (auto &it_per_id : f_manager.feature)
+//     {
+//         int imu_j = it_per_id.start_frame - 1;
+//         SFMFeature tmp_feature;
+//         tmp_feature.state = false;
+//         tmp_feature.id = it_per_id.feature_id;
+//         for (auto &it_per_frame : it_per_id.feature_per_frame)
+//         {
+//             imu_j++;
+//             Vector3d pts_j = it_per_frame.point;
+//             tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
+//         }
+//         sfm_f.push_back(tmp_feature);
+//     } 
+//     Matrix3d relative_R;
+//     Vector3d relative_T;
+//     int l;
+//     // Try to find a good relative pose for initialization
+//     int max_attempts = 5;
+//     int min_features = 30;  // Minimum features to attempt initialization
+//     bool relative_pose_found = false;
+    
+//     // Check if we have enough features to proceed
+//     if (f_manager.getFeatureCount() < min_features) {
+//         ROS_WARN("Not enough features for relative pose estimation (%d < %d)", 
+//                 f_manager.getFeatureCount(), min_features);
+//         return false;
+//     }
+    
+//     for (int attempt = 0; attempt < max_attempts; ++attempt) {
+//         if (relativePose(relative_R, relative_T, l)) {
+//             ROS_INFO("Enough features and parallax");
+//             return true;
+//             // // Check if we have enough parallax
+//             // double parallax = 0;
+//             // int parallax_num = 0;
+//             // for (auto &it_per_id : f_manager.feature) {
+//             //     if (it_per_id.start_frame <= l && it_per_id.feature_per_frame.size() >= 2) {
+//             //         parallax += it_per_id.estimated_depth;
+//             //         parallax_num++;
+//             //     }
+//             // }
+            
+//             // if (parallax_num > 0) {
+//             //     parallax /= parallax_num;
+//             //     if (parallax > 0.1) {  // Minimum parallax threshold
+//             //         relative_pose_found = true;
+//             //         ROS_INFO("Found good relative pose with parallax: %f", parallax);
+//             //         break;
+//             //     } else {
+//             //         ROS_WARN("Insufficient parallax (%.4f < 0.1), retrying...", parallax);
+//             //     }
+//             // }
+//         }
+        
+//         if (attempt < max_attempts - 1) {
+//             // Remove some features and try again
+//             set<int> removeIndex;
+//             int remove_count = f_manager.feature.size() * 0.3;  // Remove 30% of features
+//             int i = 0;
+//             for (auto it = f_manager.feature.begin(); it != f_manager.feature.end() && i < remove_count; ) {
+//                 if (it->feature_per_frame.size() < 3) {
+//                     removeIndex.insert(it->feature_id);
+//                     it = f_manager.feature.erase(it);
+//                     i++;
+//                 } else {
+//                     ++it;
+//                 }
+//             }
+//             // ROS_WARN("Retrying with %zu features (removed %d)", f_manager.feature.size(), remove_count);
+//         }
+
+//         ROS_INFO("Not enough features or parallax; Move device around");
+//     }
+    
+//     if (!relative_pose_found) {
+//         ROS_WARN("Failed to find good relative pose after %d attempts", max_attempts);
+//         return false;
+//     }
+//     GlobalSFM sfm;
+//     if(!sfm.construct(this->frame_count + 1, Q, T, l,
+//               relative_R, relative_T,
+//               sfm_f, sfm_tracked_points))
+//     {
+//         ROS_DEBUG("global SFM failed!");
+//         marginalization_flag = MARGIN_OLD;
+//         return false;
+//     }
+
+//     //solve pnp for all frame
+//     map<double, ImageFrame>::iterator frame_it;
+//     map<int, Vector3d>::iterator it;
+//     frame_it = all_image_frame.begin( );
+//     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
+//     {
+//         // provide initial guess
+//         cv::Mat r, rvec, t, D, tmp_r;
+//         if((frame_it->first) == Headers[i])
+//         {
+//             frame_it->second.is_key_frame = true;
+//             frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
+//             frame_it->second.T = T[i];
+//             i++;
+//             continue;
+//         }
+//         if((frame_it->first) > Headers[i])
+//         {
+//             i++;
+//         }
+//         Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
+//         Vector3d P_inital = - R_inital * T[i];
+//         cv::eigen2cv(R_inital, tmp_r);
+//         cv::Rodrigues(tmp_r, rvec);
+//         cv::eigen2cv(P_inital, t);
+
+//         frame_it->second.is_key_frame = false;
+//         vector<cv::Point3f> pts_3_vector;
+//         vector<cv::Point2f> pts_2_vector;
+//         for (auto &id_pts : frame_it->second.points)
+//         {
+//             int feature_id = id_pts.first;
+//             for (auto &i_p : id_pts.second)
+//             {
+//                 it = sfm_tracked_points.find(feature_id);
+//                 if(it != sfm_tracked_points.end())
+//                 {
+//                     Vector3d world_pts = it->second;
+//                     cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
+//                     pts_3_vector.push_back(pts_3);
+//                     Vector2d img_pts = i_p.second.head<2>();
+//                     cv::Point2f pts_2(img_pts(0), img_pts(1));
+//                     pts_2_vector.push_back(pts_2);
+//                 }
+//             }
+//         }
+//         cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);     
+//         if(pts_3_vector.size() < 6)
+//         {
+//             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
+//             ROS_DEBUG("Not enough points for solve pnp !");
+//             return false;
+//         }
+//         if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
+//         {
+//             ROS_DEBUG("solve pnp fail!");
+//             return false;
+//         }
+//         cv::Rodrigues(rvec, r);
+//         MatrixXd R_pnp,tmp_R_pnp;
+//         cv::cv2eigen(r, tmp_R_pnp);
+//         R_pnp = tmp_R_pnp.transpose();
+//         MatrixXd T_pnp;
+//         cv::cv2eigen(t, T_pnp);
+//         T_pnp = R_pnp * (-T_pnp);
+//         frame_it->second.R = R_pnp * RIC[0].transpose();
+//         frame_it->second.T = T_pnp;
+//     }
+//     if (visualInitialAlign())
+//         return true;
+//     else
+//     {
+//         ROS_INFO("misalign visual structure with IMU");
+//         return false;
+//     }
+
+// }
 
 bool Estimator::visualInitialAlign()
 {
@@ -954,51 +1255,153 @@ void Estimator::double2vector()
 
 bool Estimator::failureDetection()
 {
-    return false;
-    if (f_manager.last_track_num < 2)
-    {
-        ROS_INFO(" little feature %d", f_manager.last_track_num);
-        //return true;
+    // Skip failure detection if recovery is disabled
+    if (!ENABLE_FAILURE_RECOVERY) {
+        return false;
     }
-    if (Bas[WINDOW_SIZE].norm() > 2.5)
-    {
-        ROS_INFO(" big IMU acc bias estimation %f", Bas[WINDOW_SIZE].norm());
-        return true;
+
+    // skip failure detection immediate next frame after re-init
+    if (recent_failure) {
+        recent_failure = false;
+        return false;
     }
-    if (Bgs[WINDOW_SIZE].norm() > 1.0)
-    {
-        ROS_INFO(" big IMU gyr bias estimation %f", Bgs[WINDOW_SIZE].norm());
-        return true;
+
+    // Check for insufficient features
+    if (f_manager.last_track_num < MIN_TRACKED_FEATURES) {
+        insufficient_features_frames++;
+        if (insufficient_features_frames > MAX_INSUFFICIENT_FEATURE_FRAMES) {
+            ROS_WARN("Insufficient features tracked: %d (min required: %d)", 
+                    f_manager.last_track_num, MIN_TRACKED_FEATURES);
+            consecutive_tracking_failures++;
+            insufficient_features_frames = 0;
+            return true;
+        }
+        return false;
     }
-    /*
-    if (tic(0) > 1)
-    {
-        ROS_INFO(" big extri param estimation %d", tic(0) > 1);
-        return true;
-    }
-    */
+    
+    // // Check IMU bias
+    // if (Bas[WINDOW_SIZE].norm() > 5.0) {
+    //     ROS_ERROR("Excessive IMU accelerometer bias: %f", Bas[WINDOW_SIZE].norm());
+    //     return true;
+    // }
+    
+    // if (Bgs[WINDOW_SIZE].norm() > 2.0) {
+    //     ROS_ERROR("Excessive IMU gyroscope bias: %f", Bgs[WINDOW_SIZE].norm());
+    //     return true;
+    // }
+    
+    // Check for large translation jumps
     Vector3d tmp_P = Ps[WINDOW_SIZE];
-    if ((tmp_P - last_P).norm() > 5)
-    {
-        //ROS_INFO(" big translation");
-        //return true;
+    double translation = (tmp_P - last_P).norm();
+    if (translation > MAX_TRANSLATION) {
+        ROS_WARN("Large translation detected: %.2f m (max: %.2f m)", 
+                translation, MAX_TRANSLATION);
+        consecutive_tracking_failures++;
+        return true;
     }
-    if (abs(tmp_P.z() - last_P.z()) > 1)
-    {
-        //ROS_INFO(" big z translation");
-        //return true; 
+    
+    // Check for excessive acceleration (only if we have previous acceleration data)
+    if (last_acc_check_time > 0 && !linear_acceleration_buf[WINDOW_SIZE].empty()) {
+        double current_time = Headers[WINDOW_SIZE];
+        double dt = current_time - last_acc_check_time;
+        
+        if (dt > 0.01) {  // Only check if we have a valid time difference
+            const Vector3d& current_acc = linear_acceleration_buf[WINDOW_SIZE].back();
+            
+            // Calculate acceleration magnitude (remove gravity)
+            double acc_magnitude = (current_acc - g).norm();
+            
+            // Check for excessive acceleration
+            if (acc_magnitude > MAX_ACCELERATION) {
+                ROS_WARN("Excessive acceleration detected: %.2f m/s2 (limit: %.2f m/s2)", 
+                        acc_magnitude, MAX_ACCELERATION);
+                consecutive_tracking_failures++;
+                return true;
+            }
+            
+            // Check for sudden acceleration changes (jerk)
+            if (!prev_acc.isZero()) {
+                double acc_change = (current_acc - prev_acc).norm() / dt;  // Jerk
+                const double MAX_ALLOWED_JERK = 2.0 * MAX_ACCELERATION;  // Allow higher jerk for brief periods
+                if (acc_change > MAX_ALLOWED_JERK) {
+                    ROS_WARN("Excessive jerk detected: %.2f m/s3 (limit: %.2f m/s3)", 
+                            acc_change, MAX_ALLOWED_JERK);
+                    consecutive_tracking_failures++;
+                    return true;
+                }
+            }
+            
+            prev_acc = current_acc;
+            last_acc_check_time = current_time;
+        }
+    } else if (!linear_acceleration_buf[WINDOW_SIZE].empty()) {
+        // Initialize timing on first check
+        last_acc_check_time = Headers[WINDOW_SIZE];
     }
+    
+    // Check for large rotation jumps
     Matrix3d tmp_R = Rs[WINDOW_SIZE];
     Matrix3d delta_R = tmp_R.transpose() * last_R;
     Quaterniond delta_Q(delta_R);
-    double delta_angle;
-    delta_angle = acos(delta_Q.w()) * 2.0 / 3.14 * 180.0;
-    if (delta_angle > 50)
-    {
-        ROS_INFO(" big delta_angle ");
-        //return true;
+    double delta_angle = acos(delta_Q.w()) * 2.0 / 3.14 * 180.0;
+    // ROS_WARN("Rotation detected: %f degrees", delta_angle);
+    if (delta_angle > MAX_ROTATION) {
+        ROS_WARN("Large rotation detected: %.1f degrees (max: %.1f degrees)", 
+                delta_angle, MAX_ROTATION);
+        if (largeRot) {  // reset after 2 in a row
+            consecutive_tracking_failures++;
+            largeRot = false;
+            return true;
+        }
+        largeRot = true;
+    } else {
+        largeRot = false;
     }
+    
+    // Reset failure counter if we're doing well
+    if (consecutive_tracking_failures > 0) {
+        consecutive_tracking_failures--;
+    }
+    
     return false;
+}
+
+void Estimator::checkTrackingQuality()
+{
+    double current_time = Headers[frame_count];
+    
+    // Only check tracking quality every 0.5 seconds
+    if (current_time - last_tracking_quality_time < 0.5) {
+        return;
+    }
+    last_tracking_quality_time = current_time;
+    
+    // Check feature count
+    int tracked_features = f_manager.getFeatureCount();
+    int min_required_features = 30;  // Minimum number of features to consider tracking good
+    
+    // Check reprojection errors
+    double avg_reproj_error = 0.0;
+    int valid_features = 0;
+    
+    // // Update tracking status based on conditions
+    // if (tracked_features < min_required_features || consecutive_tracking_failures > 5) {
+    //     tracking_status = TrackingStatus::LOST;
+    //     ROS_ERROR("Tracking LOST! Features: %d, Consecutive failures: %d", 
+    //              tracked_features, consecutive_tracking_failures);
+    // } else if (tracked_features < min_required_features * 1.5 || consecutive_tracking_failures > 2) {
+    //     tracking_status = TrackingStatus::DEGRADED;
+    //     ROS_WARN("Tracking degraded. Features: %d, Failures: %d", 
+    //             tracked_features, consecutive_tracking_failures);
+    // } else {
+    //     tracking_status = TrackingStatus::NORMAL;
+    // }
+    
+    // If tracking is lost, trigger system reset
+    if (tracking_status == TrackingStatus::LOST) {
+        ROS_WARN("Initiating system reset due to tracking loss");
+        resetSystem();
+    }
 }
 
 void Estimator::optimization()
@@ -1608,4 +2011,111 @@ void Estimator::updateLatestStates()
         tmp_gyrBuf.pop();
     }
     mPropagate.unlock();
+}
+
+void Estimator::resetSystem()
+{
+    ROS_WARN("================ SYSTEM RESET ================");
+    
+    try {
+        // Save current state for potential recovery
+        Eigen::Vector3d last_position = Ps[WINDOW_SIZE];
+        Eigen::Matrix3d last_rotation = Rs[WINDOW_SIZE];
+        ROS_WARN("Last position before reset: [%f, %f, %f]", 
+                last_position.x(), last_position.y(), last_position.z());
+        
+        // Reset tracking state first (no locks needed)
+        {
+            // std::lock_guard<std::mutex> lock(mProcess);
+            tracking_status = TrackingStatus::NORMAL;
+            consecutive_tracking_failures = 0;
+            last_tracking_quality_time = 0;
+            solver_flag = INITIAL;
+        }
+        
+        // Clear the system state
+        ROS_INFO("Clearing system state...");
+        clearState();
+        
+        // Reset feature manager
+        ROS_INFO("Resetting feature manager...");
+        f_manager.clearState();
+        
+        // Reset IMU integration
+        if (tmp_pre_integration != nullptr) {
+            delete tmp_pre_integration;
+            tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[0], Bgs[0]};
+        }
+        
+        // Reset frame count and timestamps
+        frame_count = 0;
+        first_imu = false;
+        initFirstPoseFlag = false;
+        
+        ROS_WARN("System reset completed successfully");
+    } catch (const std::exception& e) {
+        ROS_ERROR("Exception during system reset: %s", e.what());
+    } catch (...) {
+        ROS_ERROR("Unknown exception during system reset");
+    }
+    
+    // Clear all image frames to ensure clean re-initialization
+    all_image_frame.clear();
+    
+    // Reset IMU pre-integration
+    if (tmp_pre_integration != nullptr) {
+        delete tmp_pre_integration;
+    }
+    // Initialize with default values
+    tmp_pre_integration = new IntegrationBase{Vector3d::Zero(), Vector3d::Zero(), Vector3d::Zero(), Vector3d::Zero()};
+    
+    // Clear all buffers
+    while (!accBuf.empty()) accBuf.pop();
+    while (!gyrBuf.empty()) gyrBuf.pop();
+    while (!featureBuf.empty()) featureBuf.pop();
+    
+    // Reset frame count and flags
+    frame_count = 0;
+    first_imu = false;
+    initFirstPoseFlag = false;
+    
+    // Reset IMU related states
+    prevTime = -1;
+    curTime = 0;
+    openExEstimation = 0;
+    
+    // Reset initial pose
+    initP = Vector3d(0, 0, 0);
+    initR = Matrix3d::Identity();
+    
+    // Reset all IMU bias and pre-integration
+    for (int i = 0; i < WINDOW_SIZE + 1; i++) {
+        Rs[i].setIdentity();
+        Ps[i] = Vector3d::Zero();
+        Vs[i] = Vector3d::Zero();
+        Bas[i] = Vector3d::Zero();
+        Bgs[i] = Vector3d::Zero();
+        dt_buf[i].clear();
+        linear_acceleration_buf[i].clear();
+        angular_velocity_buf[i].clear();
+    }
+
+    for (auto& pre_int : pre_integrations) {
+        if (pre_int != nullptr) {
+            delete pre_int;
+            pre_int = new IntegrationBase{Vector3d::Zero(), Vector3d::Zero(), 
+                                       Vector3d::Zero(), Vector3d::Zero()};
+        }
+    }
+    
+    // Reset camera parameters
+    for (int i = 0; i < NUM_OF_CAM; i++) {
+        tic[i] = Vector3d::Zero();
+        ric[i] = Matrix3d::Identity();
+    }
+    
+    // Clear failure flag to allow reinitialization
+    failure_occur = 0;
+    
+    ROS_WARN("System reset complete. Ready for re-initialization...");
 }

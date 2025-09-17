@@ -66,6 +66,8 @@ class Estimator
     void vector2double();
     void double2vector();
     bool failureDetection();
+    void checkTrackingQuality();
+    void resetSystem();
     bool getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                               vector<pair<double, Eigen::Vector3d>> &gyrVector);
     void getPoseInWorldFrame(Eigen::Matrix4d &T);
@@ -83,7 +85,14 @@ class Estimator
     enum SolverFlag
     {
         INITIAL,
-        NON_LINEAR
+        NON_LINEAR,
+        RESETTING
+    };
+
+    enum class TrackingStatus {
+        NORMAL,
+        DEGRADED,
+        LOST
     };
 
     enum MarginalizationFlag
@@ -100,6 +109,7 @@ class Estimator
     queue<pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > > featureBuf;
     double prevTime, curTime;
     bool openExEstimation;
+    bool largeRot, largeTrans;
 
     std::thread trackThread;
     std::thread processThread;
@@ -141,7 +151,14 @@ class Estimator
 
     bool first_imu;
     bool is_valid, is_key;
-    bool failure_occur;
+    int failure_occur;
+    TrackingStatus tracking_status;
+    int consecutive_tracking_failures;
+    double last_tracking_quality_time;
+    bool recent_failure = 0;
+    int insufficient_features_frames = 0;
+    Vector3d prev_acc = Vector3d::Zero();
+    double last_acc_check_time = -1;
 
     vector<Vector3d> point_cloud;
     vector<Vector3d> margin_cloud;

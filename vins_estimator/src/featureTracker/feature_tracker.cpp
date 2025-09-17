@@ -54,7 +54,10 @@ FeatureTracker::FeatureTracker()
 
 void FeatureTracker::setMask()
 {
-    mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
+    if(MASKING) // Added
+        mask = MASKING_IMG.clone(); //added
+    else //added
+        mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255)); 
 
     // prefer to keep features that are tracked for long time
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
@@ -277,6 +280,8 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
         featureFrame[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
     }
+
+    //ROS_INFO("matched num : %d", ids.size());
 
     if (!_img1.empty() && stereo_cam)
     {

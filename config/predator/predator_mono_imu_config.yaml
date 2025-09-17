@@ -1,0 +1,112 @@
+%YAML:1.0
+
+#common parameters
+#support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
+imu: 1         
+num_of_cam: 1  
+
+imu_topic: "/imu_apps"
+# imu_topic: "/imu_raw"
+image0_topic: "/tracking_front"
+output_path: "~/output/"
+
+cam0_calib: "cam0_pinhole.yaml"
+image_width: 1280
+image_height: 800
+   
+
+# Extrinsic parameter between IMU and Camera.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+                        # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
+
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   # T_ci:  (imu0 to cam0): 
+   # imu0 - voxl imu_apps
+   # data: [-0.01180533,  0.992684  ,  0.12016286, -0.00009272,
+   #        -0.99825556, -0.00474791, -0.05884978,  0.00107752,
+   #        -0.05784871, -0.12064799,  0.99100837, -0.00161645,
+   #         0.        ,  0.        ,  0.        ,  1.        ]
+   # refined with calib bag
+   data: [ 8.48854210e-04,  9.90648357e-01,  1.36437210e-01, -2.52900687e-02,
+          -9.99607457e-01,  4.66134394e-03, -2.76261271e-02,  1.67388710e-02,
+          -2.80037582e-02, -1.36360202e-01,  9.90263442e-01,  8.74306068e-02,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+   # imu1 - inertial sense imu_raw
+   # data: [-0.99991702, -0.01223747, -0.00402401, -0.00436323,
+   #         0.01265662, -0.99144362, -0.12992057, -0.19794566,
+   #        -0.00239968, -0.12996072,  0.99151624, -0.23369448,
+   #         0.        ,  0.        ,  0.        ,  1.        ]
+   # refined with calib bag
+   # data: [-0.99986484, -0.00352712, -0.01605826, -0.04304844,
+   #         0.00572064, -0.99032134, -0.13867559,  0.03375458,
+   #        -0.01541371, -0.13874871,  0.99020766,  0.09388147,
+   #         0.        ,  0.        ,  0.        ,  1.        ]
+
+
+#Multiple thread support
+multiple_thread: 1
+
+#feature traker paprameters
+max_cnt: 150            # max feature number in feature tracking
+min_dist: 30            # min distance between two features 
+freq: 0                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
+F_threshold: 1.0        # ransac threshold (pixel)
+show_track: 1           # publish tracking image as topic
+flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+
+#optimization parameters
+max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_num_iterations: 8   # max solver itrations, to guarantee real time
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
+
+#imu parameters       The more accurate parameters you provide, the better performance
+# imu1, inertial sense imu_raw
+# acc_n: 0.0052
+# acc_w: 0.00036
+# gyr_n: 0.006
+# gyr_w: 1.0e-05
+# use these
+# acc_n: 0.026
+# acc_w: 0.00036
+# gyr_n: 0.03
+# gyr_w: 1.0e-05
+# acc_n: 0.1
+# acc_w: 0.01
+# gyr_n: 0.001
+# gyr_w: 0.0001
+
+# imu0, imu_apps
+acc_n: 0.10666 
+# Noise density (discrete): 1.527138794609056 
+acc_w: 0.0357402
+gyr_n: 0.0004
+# Noise density (discrete): 0.005727128425310542 
+gyr_w: 1.565e-05
+
+# icm
+# acc_n: 0.1          # accelerometer measurement noise standard deviation. 
+# gyr_n: 0.05         # gyroscope measurement noise standard deviation.     
+# acc_w: 0.0002        # accelerometer bias random work noise standard deviation.  
+# gyr_w: 0.000004       # gyroscope bias random work noise standard deviation.   
+
+# lsm
+# acc_n: 1.          # accelerometer measurement noise standard deviation. 
+# gyr_n: 0.1         # gyroscope measurement noise standard deviation.     
+# acc_w: 0.01        # accelerometer bias random work noise standard deviation.  
+# gyr_w: 0.001       # gyroscope bias random work noise standard deviation.   
+
+g_norm: 9.81007     # gravity magnitude
+
+#unsynchronization parameters
+estimate_td: 0                      # online estimate time offset between camera and imu
+# td: 0.0                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+# td: 0.010522516445315957  # imu_raw
+td: 0.00965936284593275  # imu_apps
+
+#loop closure parameters
+load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
+pose_graph_save_path: "~/output/pose_graph/" # save and load path
+save_image: 1                   # save image in pose graph for visualization prupose; you can close this function by setting 0 

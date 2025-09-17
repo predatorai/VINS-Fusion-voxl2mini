@@ -32,13 +32,24 @@ std::string OUTPUT_FOLDER;
 std::string IMU_TOPIC;
 int ROW, COL;
 double TD;
+
+// Failure detection parameters
+double MAX_ACCELERATION = 20.0;     // m/s²
+double MAX_ANGULAR_VEL = 5.0;       // rad/s
+double MAX_TRANSLATION = 1.0;       // meters
+double MAX_ROTATION = 30.0;         // degrees
+int MAX_INSUFFICIENT_FEATURE_FRAMES = 10;
+int MIN_TRACKED_FEATURES = 20;      // minimum number of features
+bool ENABLE_FAILURE_RECOVERY = true; // enable/disable failure recovery
 int NUM_OF_CAM;
 int STEREO;
 int USE_IMU;
 int MULTIPLE_THREAD;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
-std::string FISHEYE_MASK;
+int MASKING; //added
+std::string MASKING_PATH;
+cv::Mat MASKING_IMG; //added
 std::vector<std::string> CAM_NAMES;
 int MAX_CNT;
 int MIN_DIST;
@@ -86,6 +97,22 @@ void readParameters(std::string config_file)
     F_THRESHOLD = fsSettings["F_threshold"];
     SHOW_TRACK = fsSettings["show_track"];
     FLOW_BACK = fsSettings["flow_back"];
+
+    // Read failure detection parameters
+    if (fsSettings["max_acceleration"].isReal())
+        MAX_ACCELERATION = fsSettings["max_acceleration"];
+    if (fsSettings["max_angular_vel"].isReal())
+        MAX_ANGULAR_VEL = fsSettings["max_angular_vel"];
+    if (fsSettings["max_translation"].isReal())
+        MAX_TRANSLATION = fsSettings["max_translation"];
+    if (fsSettings["max_rotation"].isReal())
+        MAX_ROTATION = fsSettings["max_rotation"];
+    if (fsSettings["min_tracked_features"].isInt())
+        MIN_TRACKED_FEATURES = fsSettings["min_tracked_features"];
+    if (fsSettings["enable_failure_recovery"].isInt())
+        ENABLE_FAILURE_RECOVERY = (int)fsSettings["enable_failure_recovery"] != 0;
+    if (fsSettings["max_insufficient_feature_frames"].isInt())
+        MAX_INSUFFICIENT_FEATURE_FRAMES = fsSettings["max_insufficient_feature_frames"];
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
@@ -172,6 +199,13 @@ void readParameters(std::string config_file)
         cv::cv2eigen(cv_T, T);
         RIC.push_back(T.block<3, 3>(0, 0));
         TIC.push_back(T.block<3, 1>(0, 3));
+    }
+
+    MASKING = fsSettings["masking"]; // added
+    if (MASKING){
+        fsSettings["mask_img_name"] >> MASKING_PATH; //added
+        std::string absolute_mask_path = configPath + "/" + MASKING_PATH;
+        MASKING_IMG=cv::imread(absolute_mask_path,cv::IMREAD_GRAYSCALE);
     }
 
     INIT_DEPTH = 5.0;

@@ -1,0 +1,16 @@
+%YAML:1.0
+---
+model_type: KANNALA_BRANDT
+camera_name: camera
+image_width: 160
+image_height: 120
+distortion_parameters:
+   k1: -0.07429217500676795
+   k2: 0.02142211810712962
+   k3: -0.01590836959752232
+   k4: 0.003206166005408694
+projection_parameters:
+   fx: 49.95108833823704
+   fy: 50.1757291073826
+   cx: 76.8218334680932
+   cy: 60.87271801450861
