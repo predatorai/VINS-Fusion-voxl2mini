@@ -117,6 +117,8 @@ void readParameters(std::string config_file)
         ENABLE_FAILURE_RECOVERY = (int)fsSettings["enable_failure_recovery"] != 0;
     if (fsSettings["max_insufficient_feature_frames"].isInt())
         MAX_INSUFFICIENT_FEATURE_FRAMES = fsSettings["max_insufficient_feature_frames"];
+    if (fsSettings["reset_every_n"].isInt())
+        RESET_EVERY_N = fsSettings["reset_every_n"];
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
 

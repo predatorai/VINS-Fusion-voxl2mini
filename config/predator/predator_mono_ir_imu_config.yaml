@@ -108,6 +108,7 @@ max_angular_vel: 5.0       # Maximum allowed angular velocity (rad/s)
 max_translation: 30.0       # Maximum translation between frames (m)
 max_rotation: 30.0         # Maximum rotation between frames (degrees)
 min_tracked_features: 10   # Minimum number of tracked features
+reset_every_n: 0           # Reset system every N frames (0 = disabled)
 enable_failure_recovery: 1 # Enable/disable failure recovery
 
 #optimization parameters
