@@ -44,4 +44,4 @@ add_executable(loop_fusion_node
     src/ThirdParty/VocabularyBinary.cpp
     )
 
-target_link_libraries(loop_fusion_node ${catkin_LIBRARIES}  ${OpenCV_LIBS} ${CERES_LIBRARIES} ${Ceres_LIBS} ${Glog_LIBS}) 
+target_link_libraries(loop_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${Ceres_LIBS} ${Glog_LIBS}) 

@@ -8,7 +8,7 @@
  *******************************************************/
 
 #pragma once
- 
+#define MAX_LOG_LEVEL 0 
 #include <thread>
 #include <mutex>
 #include <std_msgs/Header.h>

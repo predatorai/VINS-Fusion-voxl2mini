@@ -71,4 +71,4 @@ add_library(camera_models
     src/gpl/EigenQuaternionParameterization.cc)
 
 # target_link_libraries(Calibrations ${Boost_LIBRARIES} "/usr/include/opencv" "/usr/include/ceres")
-target_link_libraries(camera_models ${Boost_LIBRARIES} "/usr/include/opencv" "/usr/include/ceres")
+target_link_libraries(camera_models ${Boost_LIBRARIES})

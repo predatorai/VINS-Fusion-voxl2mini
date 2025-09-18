@@ -424,7 +424,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     
     // If we're in a failed state, try to reinitialize
     // static int reinit_attempts = 0;
-    const int max_reinit_attempts = 10;
+    // const int max_reinit_attempts = 10;
     
     // if (failure_occur) {
     //     // Keep some history but limit the number of frames to prevent memory issues
@@ -1383,12 +1383,12 @@ void Estimator::checkTrackingQuality()
     last_tracking_quality_time = current_time;
     
     // Check feature count
-    int tracked_features = f_manager.getFeatureCount();
-    int min_required_features = 30;  // Minimum number of features to consider tracking good
+    // int tracked_features = f_manager.getFeatureCount();
+    // int min_required_features = 30;  // Minimum number of features to consider tracking good
     
     // Check reprojection errors
-    double avg_reproj_error = 0.0;
-    int valid_features = 0;
+    // double avg_reproj_error = 0.0;
+    // int valid_features = 0;
     
     // // Update tracking status based on conditions
     // if (tracked_features < min_required_features || consecutive_tracking_failures > 5) {
@@ -2026,7 +2026,7 @@ void Estimator::resetSystem()
     try {
         // Save current state for potential recovery
         Eigen::Vector3d last_position = Ps[WINDOW_SIZE];
-        Eigen::Matrix3d last_rotation = Rs[WINDOW_SIZE];
+        // Eigen::Matrix3d last_rotation = Rs[WINDOW_SIZE];
         ROS_WARN("Last position before reset: [%f, %f, %f]", 
                 last_position.x(), last_position.y(), last_position.z());
         

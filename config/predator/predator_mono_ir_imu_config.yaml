@@ -12,10 +12,10 @@ imu_topic: "/imu_apps"  # imu0
 # image0_topic: "/cam1/image_raw"
 # image0_topic: "/cam2/image_raw"
 # image0_topic: "/cam3/image_raw"
-# image0_topic: "/lepton0_raw"
+image0_topic: "/lepton0_raw"
 # image0_topic: "/lepton0_raw_minmax"
 # image0_topic: "/lepton_fish_8bit"
-image0_topic: "/lepton57_8bit"
+# image0_topic: "/lepton57_8bit"
 # image0_topic: "/boson"
 
 output_path: "~/output/"
@@ -51,10 +51,10 @@ body_T_cam0: !!opencv-matrix
    #        -0.00446034,  0.03365483,  0.99942356,  0.00845617,
    #         0.        ,  0.        ,  0.        ,  1.        ]
    # vins optimized on calib bag
-   # data: [-0.00792407, -0.99981406,  0.01758022,  0.01083055,
-   #         0.9998778 , -0.00815905, -0.01333494,  0.02143264,
-   #         0.0134759 ,  0.0174724 ,  0.99975653,  0.01212692,
-   #         0.        ,  0.        ,  0.        ,  1.        ]
+   data: [-0.00792407, -0.99981406,  0.01758022,  0.01083055,
+           0.9998778 , -0.00815905, -0.01333494,  0.02143264,
+           0.0134759 ,  0.0174724 ,  0.99975653,  0.01212692,
+           0.        ,  0.        ,  0.        ,  1.        ]
 
    # boson
    # data: [-0.00458184, -0.99991368,  0.01231452,  0.00173886,
@@ -82,10 +82,10 @@ body_T_cam0: !!opencv-matrix
    #         0.03359614, -0.04013552, -0.99862928, -0.00006408,
    #         0.        ,  0.        ,  0.        ,  1.        ]
    # vins optimized on calib bag
-   data: [ 0.00770705,  0.99924668, -0.03803524, -0.02124284,
-           0.99956158, -0.00661092,  0.02886085,  0.05134566,
-           0.02858766, -0.038241  , -0.99885954,  0.00284112,
-           0.        ,  0.        ,  0.        ,  1.        ]
+   # data: [ 0.00770705,  0.99924668, -0.03803524, -0.02124284,
+   #         0.99956158, -0.00661092,  0.02886085,  0.05134566,
+   #         0.02858766, -0.038241  , -0.99885954,  0.00284112,
+   #         0.        ,  0.        ,  0.        ,  1.        ]
 
 #Multiple thread support
 multiple_thread: 1
@@ -105,7 +105,7 @@ flow_back: 1            # perform forward and backward optical flow to improve f
 max_insufficient_feature_frames: 20
 max_acceleration: 100.0     # Maximum allowed acceleration (m/s^2)
 max_angular_vel: 5.0       # Maximum allowed angular velocity (rad/s)
-max_translation: 30.0       # Maximum translation between frames (m)
+max_translation: 35.0       # Maximum translation between frames (m)
 max_rotation: 30.0         # Maximum rotation between frames (degrees)
 min_tracked_features: 10   # Minimum number of tracked features
 reset_every_n: 0           # Reset system every N frames (0 = disabled)
@@ -150,14 +150,14 @@ g_norm: 9.81007     # gravity magnitude
 estimate_td: 0
 # td: 0.0                      # online estimate time offset between camera and imu
 # td: -0.014681057646229663  # lepton57 imu0
-# td: -0.012138  # vins estimated
+td: -0.012138  # vins estimated
 # td: -0.06275731718629535  # boson
 # td: -0.055409  # vins estimated
 # td: -0.1911035228787078  # lepton fish radtan
 # td: -0.004753499403623977  # lepton95 - 9/5
 # td: -0.013534  # vins estimated
 # td: -0.17591273124279797  # lepton57 - 9/5
-td: -0.182360  # vins estimated
+# td: -0.182360  # vins estimated
 
 #loop closure parameters
 load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
